@@ -8,30 +8,37 @@ extern crate nalgebra as na;
 /// The gravitational constant.
 const _G: f64 = 6.67430e-11;
 
+/// An approximate AU to get us going.
+const _AU: f64 = 149_597_870_700.0;
+
 fn main() {
     // Make the basic earth.
     let earth = Body::earth();
+    let sun: Body = Body::sun();
 
     // Create a ship that is just stuck 10m in the air above the surface.
-    let ship = Craft::new(
-        na::Vector3::new(0.0, 0.0, earth.radius + 10.0), // 10 m altitude
-        na::Vector3::new(0.0, 0.0, 0.0),                 // Stationary
-        200.0,
-        1.0,
-    );
+    let ship = Craft::new_above(&earth, 10.0);
+    // let ship = Craft::new(
+    //     na::Vector3::new(0.0, 0.0, earth.radius + 10.0), // 10 m altitude
+    //     na::Vector3::new(0.0, 0.0, 0.0),                 // Stationary
+    //     200.0,
+    //     1.0,
+    // );
 
     let mut sim = Simulation {
         time: 0.0,
         collided: false,
         step_time: 0.01,
         print_time: 0.05,
-        bodies: vec![earth],
+        bodies: vec![earth, sun],
         crafts: vec![ship],
     };
 
     sim.show();
     sim.run();
     sim.show();
+
+    println!("Final Sun position: {:?}", sim.bodies[1].position);
 }
 
 /// A "large" object in space.  This represents planets, and anything that has a
@@ -51,12 +58,38 @@ impl Body {
     /// This is not actually correct, as the rest of the simulation assumes a
     /// non-rotating reference frame, so this is only temporary.
     fn earth() -> Self {
+        // Let's start the earth at an unusual posisition, just picking
+        // somewhere so that both values are not near zero.
+        // let x = f64::cos(23.5_f64.to_radians()) * AU;
+        // let y = f64::sin(23.5_f64.to_radians()) * AU;
+        Body {
+            // This is from the NASA ephemeris for the time below
+            // 2460941.500000000 = A.D. 2025-Sep-23 00:00:00.0000 TDB
+            //  X = 1.495620660480920E+08 Y =-1.147519768700426E+06 Z = 2.115514734450541E+04
+            //  VX=-4.082628156136917E-01 VY= 2.968689110543276E+01 VZ=-9.955089786526372E-04
+            //  LT= 4.989000412766351E+02 RG= 1.495664696706239E+08 RR=-6.360178580009550E-01
+            position: na::Vector3::new(
+                1.495620660480920E+08 * 1.0e3,
+                -1.147519768700426E+06 * 1.0e3,
+                2.115514734450541E+04 * 1.0e3,
+            ),
+            velocity: na::Vector3::new(
+                -4.082628156136917E-01 * 1.0e3,
+                2.968689110543276E+01 * 1.0e3,
+                -9.955089786526372E-04 * 1.0e3,
+            ),
+            mu: 3.986004418e14,
+            radius: 6.371e6, // Average radius in meters.
+        }
+    }
+
+    /// The sun is fairly simple.
+    fn sun() -> Self {
         Body {
             position: na::Vector3::new(0.0, 0.0, 0.0),
             velocity: na::Vector3::new(0.0, 0.0, 0.0),
-            // mu: G * 5.972e24,
-            mu: 3.986004418e14,
-            radius: 6.371e6, // Average radius in meters.
+            mu: 1.32712440018e20,
+            radius: 6.9634e8, // Average radius in meters.
         }
     }
 }
@@ -75,7 +108,21 @@ struct Craft {
 }
 
 impl Craft {
-    /// Create a new craft at the given position and velocity.
+    /// Create a new craft, above the given Body, initially, not moving.
+    /// This basically assumes we are above the ecliptic north pole, which is very much not reasonable.
+    fn new_above(body: &Body, altitude: f64) -> Self {
+        Craft {
+            position: na::Vector3::new(
+                body.position.x,
+                body.position.y,
+                body.position.z + body.radius + altitude,
+            ),
+            velocity: na::Vector3::new(body.velocity.x, body.velocity.y, body.velocity.z),
+            mass: 200.0,
+            radius: 1.0,
+        }
+    }
+
     fn new(position: na::Vector3<f64>, velocity: na::Vector3<f64>, mass: f64, radius: f64) -> Self {
         Craft {
             position,
@@ -125,13 +172,33 @@ impl Simulation {
                     continue;
                 }
                 let acceleration = rel_pos * body.mu / (distance * distance * distance);
-                // let acceleration = rel_pos.normalize() * acceleration_magnitude;
                 total_acceleration += acceleration;
             }
 
             // Update velocity and position using simple Euler integration.
             craft.velocity += total_acceleration * self.step_time;
             craft.position += craft.velocity * self.step_time;
+        }
+
+        // Update the position of each body as well.
+        let mut accels = Vec::new();
+        for body in &self.bodies {
+            let mut acceleration = na::Vector3::new(0.0, 0.0, 0.0);
+            for other in &self.bodies {
+                if std::ptr::eq(body, other) {
+                    continue;
+                }
+                let rel_pos = other.position - body.position;
+                let distance = rel_pos.norm();
+                acceleration += rel_pos * other.mu / (distance * distance * distance);
+            }
+            accels.push(acceleration);
+        }
+
+        // Apply the accumulated accelerations to each body.
+        for (body, accel) in self.bodies.iter_mut().zip(accels.iter()) {
+            body.velocity += *accel * self.step_time;
+            body.position += body.velocity * self.step_time;
         }
 
         self.time += self.step_time;
