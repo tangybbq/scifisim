@@ -25,6 +25,14 @@ fn main() {
     //     1.0,
     // );
 
+    // Let's make a little force to test this.
+    let thrust = Thrust {
+        direction: na::Vector3::new(0.0, 0.0, 1.0),
+        magnitude: 15.0, // Newtons
+        from: 0.5,       // seconds
+        until: 2.0,      // seconds
+    };
+
     let mut sim = Simulation {
         time: 0.0,
         collided: false,
@@ -32,6 +40,7 @@ fn main() {
         print_time: 0.05,
         bodies: vec![earth, sun],
         crafts: vec![ship],
+        thrust: Some(thrust),
     };
 
     sim.show();
@@ -141,6 +150,7 @@ struct Simulation {
     collided: bool,
     bodies: Vec<Body>,
     crafts: Vec<Craft>,
+    thrust: Option<Thrust>,
 }
 
 impl Simulation {
@@ -160,6 +170,7 @@ impl Simulation {
     /// Step the simulation forward by the given time step, in seconds.
     fn step(&mut self) {
         // Update the position and velocity of each craft.
+        let mut first = true;
         for craft in &mut self.crafts {
             // Calculate the total acceleration on the craft due to all bodies.
             let mut total_acceleration = na::Vector3::new(0.0, 0.0, 0.0);
@@ -173,6 +184,17 @@ impl Simulation {
                 }
                 let acceleration = rel_pos * body.mu / (distance * distance * distance);
                 total_acceleration += acceleration;
+            }
+
+            if first {
+                first = false;
+                // Apply thrust if we have it, and it's active.
+                if let Some(thrust) = &self.thrust {
+                    if thrust.is_active(self.time) {
+                        let thrust_accel = thrust.force();
+                        total_acceleration += thrust_accel;
+                    }
+                }
             }
 
             // Update velocity and position using simple Euler integration.
@@ -214,5 +236,24 @@ impl Simulation {
                 next_print += self.print_time;
             }
         }
+    }
+}
+
+struct Thrust {
+    direction: na::Vector3<f64>,
+    magnitude: f64,
+    from: f64,
+    until: f64,
+}
+
+impl Thrust {
+    #[allow(dead_code)]
+    fn is_active(&self, time: f64) -> bool {
+        time >= self.from && time <= self.until
+    }
+
+    #[allow(dead_code)]
+    fn force(&self) -> na::Vector3<f64> {
+        self.direction.normalize() * (self.magnitude)
     }
 }
