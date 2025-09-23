@@ -160,10 +160,16 @@ impl Simulation {
             // Assume the first body is the central body.
             let body = &self.bodies[0];
             let rel_pos = craft.position - body.position;
+            let up = rel_pos.normalize();
             let altitude = rel_pos.norm() - body.radius;
             let rel_vel = craft.velocity - body.velocity;
-            let speed = rel_vel.norm();
-            println!("Altitude: {:.3} m, Speed: {:.3} m/s", altitude, speed);
+            let speed = rel_vel.dot(&up);
+            let hspeed = (rel_vel - up * speed).norm();
+            // let speed = rel_vel.norm();
+            println!(
+                "Time: {:6.1} s Altitude: {:.3} m, Speed: {:.3} m/s, hSpeed: {:.3} m/s",
+                self.time, altitude, speed, hspeed,
+            );
         }
     }
 
