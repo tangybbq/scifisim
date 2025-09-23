@@ -27,7 +27,7 @@ fn main() {
 
     // Let's make a little force to test this.
     let thrust = Thrust {
-        direction: na::Vector3::new(0.0, 0.0, 1.0),
+        direction: (ship.position - earth.position).normalize(),
         magnitude: 15.0, // Newtons
         from: 0.5,       // seconds
         until: 2.0,      // seconds
@@ -43,7 +43,6 @@ fn main() {
         thrust: Some(thrust),
     };
 
-    sim.show();
     sim.run();
     sim.show();
 
@@ -60,6 +59,8 @@ struct Body {
     velocity: na::Vector3<f64>,
     mu: f64,
     radius: f64,
+    khat: na::Vector3<f64>, // The direction of the north pole.
+    omega: f64,             // The angular velocity of the body, in radians per second.
 }
 
 impl Body {
@@ -89,6 +90,12 @@ impl Body {
             ),
             mu: 3.986004418e14,
             radius: 6.371e6, // Average radius in meters.
+            khat: na::Vector3::new(
+                0.0,
+                f64::sin(23.5_f64.to_radians()),
+                f64::cos(23.5_f64.to_radians()),
+            ),
+            omega: 2.0 * std::f64::consts::PI / 86164.0, // One rotation per sideral day.
         }
     }
 
@@ -99,6 +106,8 @@ impl Body {
             velocity: na::Vector3::new(0.0, 0.0, 0.0),
             mu: 1.32712440018e20,
             radius: 6.9634e8, // Average radius in meters.
+            khat: na::Vector3::new(0.0, 0.0, 1.0),
+            omega: 0.0, // Neglecting rotation for now.
         }
     }
 }
@@ -120,18 +129,22 @@ impl Craft {
     /// Create a new craft, above the given Body, initially, not moving.
     /// This basically assumes we are above the ecliptic north pole, which is very much not reasonable.
     fn new_above(body: &Body, altitude: f64) -> Self {
+        let loc = na::Vector3::new(1.0, 1.0, 0.2).normalize();
+
+        let position = body.position + loc * (body.radius + altitude);
+        let rel_pos = position - body.position;
+        let big_omega = body.omega * body.khat;
+        let surface_speed = big_omega.cross(&rel_pos);
+        let velocity = body.velocity + surface_speed;
         Craft {
-            position: na::Vector3::new(
-                body.position.x,
-                body.position.y,
-                body.position.z + body.radius + altitude,
-            ),
-            velocity: na::Vector3::new(body.velocity.x, body.velocity.y, body.velocity.z),
+            position,
+            velocity,
             mass: 200.0,
             radius: 1.0,
         }
     }
 
+    #[allow(dead_code)]
     fn new(position: na::Vector3<f64>, velocity: na::Vector3<f64>, mass: f64, radius: f64) -> Self {
         Craft {
             position,
@@ -164,10 +177,16 @@ impl Simulation {
             let altitude = rel_pos.norm() - body.radius;
             let rel_vel = craft.velocity - body.velocity;
             let speed = rel_vel.dot(&up);
-            let hspeed = (rel_vel - up * speed).norm();
+            let big_omega = body.omega * body.khat;
+            let ground_speed = big_omega.cross(&(body.radius * up));
+
+            // Calculate hspeed based on ground speed.
+            let hspeed = (rel_vel - up * speed - ground_speed).norm();
+
+            // println!("Ground speed: {:?}", ground_speed);
             // let speed = rel_vel.norm();
             println!(
-                "Time: {:6.1} s Altitude: {:.3} m, Speed: {:.3} m/s, hSpeed: {:.3} m/s",
+                "Time: {:6.3} s Altitude: {:.3} m, Speed: {:.3} m/s, hSpeed: {:.3} m/s",
                 self.time, altitude, speed, hspeed,
             );
         }
