@@ -67,7 +67,16 @@ impl Body {
     /// Create a Body representing earth, with a reference frame centered on it.
     /// This is not actually correct, as the rest of the simulation assumes a
     /// non-rotating reference frame, so this is only temporary.
+    ///
+    /// Note that these possitions are not consistent.  J2000 defines the
+    /// coordinate system as of Jan 1, 2000, but the ephemeris data is for Sep
+    /// 23, 2025.  The axial tilt is also for J2000, which is not quite the
+    /// same.  Also, the axial tilt is directly along the Y axis, but only at
+    /// J2000.
     fn earth() -> Self {
+        // Earth's axial tilt, as of J2000.
+        const AXIAL: f64 = 23.43928f64.to_radians();
+
         // Let's start the earth at an unusual posisition, just picking
         // somewhere so that both values are not near zero.
         // let x = f64::cos(23.5_f64.to_radians()) * AU;
@@ -90,11 +99,7 @@ impl Body {
             ),
             mu: 3.986004418e14,
             radius: 6.371e6, // Average radius in meters.
-            khat: na::Vector3::new(
-                0.0,
-                f64::sin(23.5_f64.to_radians()),
-                f64::cos(23.5_f64.to_radians()),
-            ),
+            khat: na::Vector3::new(0.0, f64::sin(AXIAL), f64::cos(AXIAL)),
             omega: 2.0 * std::f64::consts::PI / 86164.0, // One rotation per sideral day.
         }
     }
