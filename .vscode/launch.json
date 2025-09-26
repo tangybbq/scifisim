@@ -1,0 +1,48 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug executable 'scifisim'",
+			"cargo": {
+				"args": [
+					"build",
+					"--bin=scifisim",
+					"--package=scifisim"
+				],
+				"filter": {
+					"name": "scifisim",
+					"kind": "bin"
+				}
+			},
+			"args": [],
+			"env": {
+				"BEVY_ASSET_ROOT": "${workspaceFolder}",
+			},
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug unit tests in library 'scifisim'",
+			"cargo": {
+				"args": [
+					"test",
+					"--no-run",
+					"--lib",
+					"--package=scifisim"
+				],
+				"filter": {
+					"name": "scifisim",
+					"kind": "lib"
+				}
+			},
+			"args": [],
+			"env": {
+				"BEVY_ASSET_ROOT": "${workspaceFolder}",
+			},
+			"cwd": "${workspaceFolder}"
+		}
+	]
+}

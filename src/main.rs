@@ -5,6 +5,10 @@
 // Recommended alias.
 extern crate nalgebra as na;
 
+use std::io::Write;
+
+use bevy::prelude::*;
+
 /// The gravitational constant.
 const _G: f64 = 6.67430e-11;
 
@@ -12,6 +16,123 @@ const _G: f64 = 6.67430e-11;
 const _AU: f64 = 149_597_870_700.0;
 
 fn main() {
+    if false {
+        old_main();
+        return;
+    }
+
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins);
+    app.add_systems(Startup, setup);
+    app.add_systems(Update, text_update_system);
+
+    setup_sim(&mut app);
+    app.run();
+
+    // App::new()
+    //     .add_plugins(DefaultPlugins.set(WindowPlugin {
+    //         window: WindowDescriptor {
+    //             title: "Orbital Mechanics Simulator".to_string(),
+    //             width: 800.0,
+    //             height: 600.0,
+    //             ..default()
+    //         },
+    //         ..default()
+    //     }))
+    //     .add_startup_system(setup)
+    //     .run();
+}
+
+// Marker struct to identify the text component.
+#[derive(Component)]
+struct StateText;
+
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // UI camera
+    commands.spawn(Camera2d);
+    commands.spawn((
+        Text::new("Hello World\nsecond line\nThis is a third line that is also longer."),
+        TextFont {
+            // This font is loaded and will be used instead of the default font.
+            font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+            font_size: 24.0,
+            ..default()
+        },
+        TextShadow::default(),
+        TextLayout::new_with_justify(JustifyText::Left),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(5.0),
+            left: Val::Px(5.0),
+            ..default()
+        },
+        StateText,
+    ));
+
+    // Camera
+    // commands.spawn((
+    //     Camera3d::default(),
+    //     Transform::from_xyz(0.0, 0.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+    // ));
+}
+
+fn text_update_system(
+    time: Res<Time>,
+    mut sim: ResMut<Simulation>,
+    mut query: Query<&mut Text, With<StateText>>,
+) {
+    // println!("text update {:.4}", time.elapsed_secs());
+
+    // Run the simulation until it's time reaches our current time.
+    let seconds: f32 = time.elapsed_secs();
+    let mut count = 0;
+    while sim.time < seconds as f64 && !sim.collided {
+        // println!("  stepping sim at {:.3}", sim.time);
+        sim.step();
+        count += 1;
+    }
+
+    if let Ok(mut text) = query.single_mut() {
+        let mut message = Vec::new();
+        writeln!(message, "Simulation time: {:.3} seconds", seconds).unwrap();
+        sim.write(&mut message);
+        writeln!(message, "{} physics steps", count).unwrap();
+        **text = String::from_utf8(message).unwrap();
+        // **text = format!("Some text now: {:.2} seconds", seconds);
+        // println!("  subtext: {}", **text);
+    }
+}
+
+fn setup_sim(app: &mut App) {
+    // Make the basic earth.
+    let earth = Body::earth();
+    let sun: Body = Body::sun();
+
+    // Create a ship that is just stuck 10m in the air above the surface.
+    let ship = Craft::new_above(&earth, 10.0);
+
+    // Let's make a little force to test this.
+    let thrust = Thrust {
+        direction: (ship.position - earth.position).normalize(),
+        magnitude: 15.0, // Newtons
+        from: 0.5,       // seconds
+        until: 2.0,      // seconds
+    };
+
+    let sim = Simulation {
+        time: 0.0,
+        collided: false,
+        step_time: 0.01,
+        print_time: 0.05,
+        bodies: vec![earth, sun],
+        crafts: vec![ship],
+        thrust: Some(thrust),
+    };
+
+    app.insert_resource(sim);
+}
+
+fn old_main() {
     // Make the basic earth.
     let earth = Body::earth();
     let sun: Body = Body::sun();
@@ -161,6 +282,7 @@ impl Craft {
 }
 
 /// A simulation of bodies and crafts in space.
+#[derive(Resource)]
 struct Simulation {
     time: f64,
     step_time: f64,
@@ -173,7 +295,7 @@ struct Simulation {
 
 impl Simulation {
     /// Show the current position of the craft, in this case altitude and velocity.
-    fn show(&self) {
+    fn write(&self, mut out: impl Write) {
         for craft in &self.crafts {
             // Assume the first body is the central body.
             let body = &self.bodies[0];
@@ -190,11 +312,17 @@ impl Simulation {
 
             // println!("Ground speed: {:?}", ground_speed);
             // let speed = rel_vel.norm();
-            println!(
+            writeln!(
+                out,
                 "Time: {:6.3} s Altitude: {:.3} m, Speed: {:.3} m/s, hSpeed: {:.3} m/s",
                 self.time, altitude, speed, hspeed,
-            );
+            )
+            .unwrap();
         }
+    }
+
+    fn show(&self) {
+        self.write(std::io::stdout());
     }
 
     /// Step the simulation forward by the given time step, in seconds.
