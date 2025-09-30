@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 bevy = "0.16.1"
 nalgebra = "0.34.1"
+rust-spice = "0.7.8"
 
 [profile.dev]
 opt-level = 1

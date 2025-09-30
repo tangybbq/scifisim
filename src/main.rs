@@ -5,12 +5,14 @@
 // Recommended alias.
 extern crate nalgebra as na;
 
+mod solar;
+
 use std::io::Write;
 
 use bevy::{
     color::palettes::css::{GOLD, GREEN},
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
-    pbr::{CascadeShadowConfigBuilder, Cascades, DirectionalLightShadowMap},
+    pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
     prelude::*,
 };
 
@@ -21,6 +23,10 @@ const _G: f64 = 6.67430e-11;
 const _AU: f64 = 149_597_870_700.0;
 
 fn main() {
+    solar::init_spice();
+    if true {
+        return;
+    }
     let mut app = App::new();
     app.add_plugins((DefaultPlugins, FrameTimeDiagnosticsPlugin::default()));
     app.add_systems(Startup, setup);
