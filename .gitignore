@@ -1,2 +1,7 @@
 /target
 houdini/backup/
+
+# SPICE kernels (downloaded by script)
+assets/spice/*.bsp
+assets/spice/*.tls
+assets/spice/*.tpc
