@@ -1,6 +1,6 @@
 /// Spice wrappers.
 use std::{
-    ffi::{CString, c_char},
+    ffi::CString,
     sync::{LazyLock, Mutex},
 };
 
@@ -47,7 +47,12 @@ impl Spice {
         let from = CString::new(from).unwrap();
         let to = CString::new(to).unwrap();
         unsafe {
-            sxform_c(from.as_ptr(), to.as_ptr(), et, &mut result);
+            spice::c::sxform_c(
+                from.as_ptr() as *mut _,
+                to.as_ptr() as *mut _,
+                et,
+                &mut result as *mut _,
+            );
         }
         result
     }
@@ -56,13 +61,12 @@ impl Spice {
         let mut rot = [[0.0; 3]; 3];
         let mut av = [0.0; 3];
         unsafe {
-            xf2rav_c(xform, &mut rot, &mut av);
+            spice::c::xf2rav_c(xform.as_ptr() as *mut _, rot.as_mut_ptr(), av.as_mut_ptr());
         }
         (rot, av)
     }
-}
 
-unsafe extern "C" {
-    unsafe fn sxform_c(from: *const c_char, to: *const c_char, et: f64, xform: *mut [[f64; 6]; 6]);
-    unsafe fn xf2rav_c(xform: *const [[f64; 6]; 6], rot: *mut [[f64; 3]; 3], av: *mut [f64; 3]);
+    // pub fn gnpool(&self, n: i32, a: &[f64]) -> f64 {
+    //     spice::gnpool(n, a)
+    // }
 }
