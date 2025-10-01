@@ -6,13 +6,74 @@
 // for spice to actually be useful, we'll need to use our own lock, and just
 // make sure we only use the API while holding the lock.
 
+use std::sync::MutexGuard;
+
 use nalgebra::{Matrix3, Vector3};
 
 mod spice;
 
-pub fn init_spice() {
-    let sl = spice::SPICE.lock().unwrap();
+pub struct Body {
+    pub id: i32,
+    pub name: String,
+    pub gm: f64, // Gravitational constant * mass, km^3/s^2
+}
 
+impl Body {
+    pub fn new_from(id: i32) -> Option<Self> {
+        let sl = spice::SPICE.lock().unwrap();
+        let (name, has_name) = sl.bodc2n(id);
+        if !has_name {
+            return None;
+        }
+        let gm = sl.bodvrd(&name, "GM", 1);
+        Some(Self {
+            id,
+            name,
+            gm: gm[0],
+        })
+    }
+}
+
+pub fn init_spice() {
+    if false {
+        let sl = spice::SPICE.lock().unwrap();
+        was_init_spice(&sl);
+    }
+    let mut bodies = Vec::new();
+    let mut start = 0;
+    loop {
+        let limit = 500;
+        let names = spice::SPICE
+            .lock()
+            .unwrap()
+            .gnpool("BODY*_GM", start, limit);
+        println!("Names: count: {}", names.len());
+        for name in &names {
+            let code = name[4..name.len() - 3].parse::<i32>().unwrap();
+
+            if let Some(body) = Body::new_from(code) {
+                if body.gm > 1.0 && !body.name.ends_with(" BARYCENTER") {
+                    bodies.push(body);
+                }
+                continue;
+            }
+        }
+        if names.len() < limit {
+            break;
+        }
+
+        start += names.len();
+    }
+
+    bodies.sort_by(|a, b| b.gm.partial_cmp(&a.gm).unwrap());
+    for body in &bodies {
+        println!("  {:20} {:20}: gm: {}", body.name, body.id, body.gm);
+    }
+
+    println!("Interesting: {}", bodies.len());
+}
+
+pub fn was_init_spice(sl: &MutexGuard<'_, spice::Spice>) {
     let et = sl.str2et("2024-01-01T00:00:00");
     let (state, _) = sl.spkezr("EARTH", et, "ECLIPJ2000", "NONE", "SSB");
     println!("pos: {state:?}");

@@ -1,6 +1,6 @@
 /// Spice wrappers.
 use std::{
-    ffi::CString,
+    ffi::{CStr, CString},
     sync::{LazyLock, Mutex},
 };
 
@@ -66,7 +66,38 @@ impl Spice {
         (rot, av)
     }
 
-    // pub fn gnpool(&self, n: i32, a: &[f64]) -> f64 {
-    //     spice::gnpool(n, a)
-    // }
+    pub fn gnpool(&self, name: &str, start: usize, room: usize) -> Vec<String> {
+        let mut buf = vec![[0u8; 33]; room];
+        let mut n = 0;
+        let mut found = 0;
+
+        unsafe {
+            spice::c::gnpool_c(
+                CString::new(name).unwrap().as_ptr() as *mut _,
+                start as i32,
+                room as i32,
+                33,
+                &mut n,
+                buf.as_mut_ptr() as *mut _,
+                &mut found,
+            );
+        }
+
+        let mut result = Vec::new();
+        for i in 0..n {
+            let str = CStr::from_bytes_until_nul(&buf[i as usize]).unwrap();
+            let str = str.to_str().unwrap().to_string();
+            result.push(str);
+        }
+        result
+    }
+
+    #[allow(dead_code)]
+    pub fn gdpool(&self, name: &str, start: usize, room: usize) -> Vec<f64> {
+        spice::gdpool(name, start, room)
+    }
+
+    pub fn bodc2n(&self, code: i32) -> (String, bool) {
+        spice::bodc2n(code)
+    }
 }
