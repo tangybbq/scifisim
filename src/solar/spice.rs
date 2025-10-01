@@ -38,6 +38,10 @@ impl Spice {
         spice::bodvrd(body, item, maxn)
     }
 
+    pub fn bodfnd(&self, body: i32, item: &str) -> bool {
+        spice::bodfnd(body, item)
+    }
+
     pub fn pxform(&self, from: &str, to: &str, et: f64) -> [[f64; 3]; 3] {
         spice::pxform(from, to, et)
     }

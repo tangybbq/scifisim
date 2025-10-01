@@ -16,6 +16,7 @@ pub struct Body {
     pub id: i32,
     pub name: String,
     pub gm: f64, // Gravitational constant * mass, km^3/s^2
+    pub radii: Vector3<f64>,
 }
 
 impl Body {
@@ -25,11 +26,26 @@ impl Body {
         if !has_name {
             return None;
         }
+        // Reject barycenters.
+        if name.ends_with(" BARYCENTER") {
+            return None;
+        }
         let gm = sl.bodvrd(&name, "GM", 1);
+        // Reject "small" bodies.  This also avoids bodies that don't have a
+        // radius.
+        if gm[0] < 1.0 {
+            return None;
+        }
+        // println!("Query: {name}: gm: {}", gm[0]);
+        if !sl.bodfnd(id, "RADII") {
+            return None;
+        }
+        let radii = sl.bodvrd(&name, "RADII", 3);
         Some(Self {
             id,
             name,
             gm: gm[0],
+            radii: Vector3::new(radii[0], radii[1], radii[2]),
         })
     }
 }
@@ -67,7 +83,10 @@ pub fn init_spice() {
 
     bodies.sort_by(|a, b| b.gm.partial_cmp(&a.gm).unwrap());
     for body in &bodies {
-        println!("  {:20} {:20}: gm: {}", body.name, body.id, body.gm);
+        println!(
+            "  {:20} {:20}: gm: {}: radii: {:?}",
+            body.name, body.id, body.gm, body.radii
+        );
     }
 
     println!("Interesting: {}", bodies.len());
