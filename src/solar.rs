@@ -6,11 +6,14 @@
 // for spice to actually be useful, we'll need to use our own lock, and just
 // make sure we only use the API while holding the lock.
 
+use bevy::ecs::component::Component;
 use na::Matrix3x1;
 use nalgebra::{Matrix3, Vector3};
+use serde::{Deserialize, Serialize};
 
 mod spice;
 
+#[derive(Component, Debug, Serialize, Deserialize)]
 pub struct Body {
     pub id: i32,
     pub name: String,
