@@ -38,6 +38,14 @@ impl Spice {
     pub fn new() -> Self {
         // Load the SPICE kernels for use.
         spice::furnsh("assets/spice/de440s.bsp");
+        spice::furnsh("assets/spice/jup365.bsp");
+        spice::furnsh("assets/spice/mar099.bsp");
+        spice::furnsh("assets/spice/nep095.bsp");
+        spice::furnsh("assets/spice/plu060.bsp");
+        spice::furnsh("assets/spice/sat441.bsp");
+        spice::furnsh("assets/spice/ura184_part-1.bsp");
+        spice::furnsh("assets/spice/ura184_part-2.bsp");
+        spice::furnsh("assets/spice/ura184_part-3.bsp");
         spice::furnsh("assets/spice/naif0012.tls");
         spice::furnsh("assets/spice/pck00011.tpc");
         spice::furnsh("assets/spice/gm_de440.tpc");

@@ -29,6 +29,30 @@ curl -L -o pck00011.tpc "${NAIF_BASE}/pck/pck00011.tpc"
 echo "Downloading gm_de440.tpc..."
 curl -L -o gm_de440.tpc "${NAIF_BASE}/pck/gm_de440.tpc"
 
+echo "Downloading jup365.bsp..."
+curl -L -o jup365.bsp "${NAIF_BASE}/spk/satellites/jup365.bsp"
+
+echo "Downloading mar099.bsp..."
+curl -L -o mar099.bsp "${NAIF_BASE}/spk/satellites/mar099.bsp"
+
+echo "Downloading nep095.bsp..."
+curl -L -o nep095.bsp "${NAIF_BASE}/spk/satellites/nep095.bsp"
+
+echo "Downloading plu060.bsp..."
+curl -L -o plu060.bsp "${NAIF_BASE}/spk/satellites/plu060.bsp"
+
+echo "Downloading sat457.bsp..."
+curl -L -o sat457.bsp "${NAIF_BASE}/spk/satellites/sat457.bsp"
+
+echo "Downloading ura184_part-1.bsp..."
+curl -L -o ura184_part-1.bsp "${NAIF_BASE}/spk/satellites/ura184_part-1.bsp"
+
+echo "Downloading ura184_part-2.bsp..."
+curl -L -o ura184_part-2.bsp "${NAIF_BASE}/spk/satellites/ura184_part-2.bsp"
+
+echo "Downloading ura184_part-3.bsp..."
+curl -L -o ura184_part-3.bsp "${NAIF_BASE}/spk/satellites/ura184_part-3.bsp"
+
 echo "All kernels downloaded successfully!"
 echo ""
 echo "Downloaded files:"
