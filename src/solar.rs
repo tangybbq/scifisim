@@ -38,7 +38,6 @@ impl Body {
         if gm[0] < 1.0 {
             return None;
         }
-        // println!("Query: {name}: gm: {}", gm[0]);
         let radii = sl.bodvrd(&name, "RADII", 3).ok()?;
         let radii = Vector3::new(radii[0], radii[1], radii[2]);
 
@@ -53,9 +52,7 @@ impl Body {
         let av = Vector3::new(av[0], av[1], av[2]);
         let omega = av.norm();
 
-        println!("Checking body: {name}");
         let (state, _) = sl.spkezr(&name, et, "ECLIPJ2000", "NONE", "SSB").ok()?;
-        println!("state: {state:?}");
 
         let pos = Vector3::new(state[0], state[1], state[2]);
         let vel = Vector3::new(state[3], state[4], state[5]);
@@ -111,44 +108,3 @@ pub fn init_spice() {
 
     println!("Interesting: {}", bodies.len());
 }
-
-/*
-pub fn was_init_spice(sl: &MutexGuard<'_, spice::Spice>) {
-    let et = sl.str2et("2024-01-01T00:00:00");
-    let (state, _) = sl.spkezr("EARTH", et, "ECLIPJ2000", "NONE", "SSB");
-    println!("pos: {state:?}");
-    let info = sl.bodvrd("EARTH", "RADII", 3);
-    println!("RADII: {info:?}");
-    let info = sl.bodvrd("EARTH", "GM", 1);
-    println!("gm: {info:?}");
-
-    // Information about north and rotation.
-    let xform = sl.sxform("IAU_EARTH", "ECLIPJ2000", et);
-    let (rot, av) = sl.xf2rav(&xform);
-    let rot = Matrix3::from_row_slice(&[
-        rot[0][0], rot[0][1], rot[0][2], // Row 0
-        rot[1][0], rot[1][1], rot[1][2], // Row 1
-        rot[2][0], rot[2][1], rot[2][2], // Row 2
-    ]);
-    let north = rot * Vector3::new(0.0, 0.0, 1.0);
-    println!("north: {north:?}");
-
-    // println!("rot: {rot:?}");
-    let av = Vector3::new(av[0], av[1], av[2]);
-    println!("av: {:?}", av.normalize());
-    println!("avnormal: {}", av.norm());
-
-    // Determine where the north pole is pointing.
-    let rot = sl.pxform("IAU_EARTH", "ECLIPJ2000", et);
-    let rot = Matrix3::from_row_slice(&[
-        rot[0][0], rot[0][1], rot[0][2], // Row 0
-        rot[1][0], rot[1][1], rot[1][2], // Row 1
-        rot[2][0], rot[2][1], rot[2][2], // Row 2
-    ]);
-    let north = rot * Vector3::new(0.0, 0.0, 1.0);
-    println!("north2: {north:?}");
-
-    let (position, light_time) = sl.spkezr("SUN", et, "ECLIPJ2000", "NONE", "SSB");
-    println!("position: {position:?}, light_time: {light_time:?}");
-}
-*/
