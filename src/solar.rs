@@ -40,6 +40,7 @@ impl Body {
         }
         // println!("Query: {name}: gm: {}", gm[0]);
         let radii = sl.bodvrd(&name, "RADII", 3).ok()?;
+        let radii = Vector3::new(radii[0], radii[1], radii[2]);
 
         let xform = sl.sxform(&format!("IAU_{}", name), "ECLIPJ2000", et).ok()?;
         let (rot, av) = sl.xf2rav(&xform).ok()?;
@@ -62,10 +63,10 @@ impl Body {
         Some(Self {
             id,
             name,
-            gm: gm[0] * 1.0e9,
-            radii: Vector3::new(radii[0], radii[1], radii[2]) * 1.0e3,
-            pos: pos * 1.0e3,
-            vel: vel * 1.0e3,
+            gm: gm[0],
+            radii,
+            pos,
+            vel,
             north,
             omega,
         })
