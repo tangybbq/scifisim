@@ -7,6 +7,25 @@ use std::{
 /// The single global SPICE instance.
 static SPICE: LazyLock<Spice> = LazyLock::new(|| Spice::new());
 
+/// An error from SPICE.
+pub struct SpiceError(String);
+
+impl std::fmt::Display for SpiceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SPICE error: {}", self.0)
+    }
+}
+
+impl std::fmt::Debug for SpiceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("SpiceError").field(&self.0).finish()
+    }
+}
+
+impl std::error::Error for SpiceError {}
+
+type Result<T> = std::result::Result<T, SpiceError>;
+
 pub fn get_instance() -> Spice {
     SPICE.clone()
 }
@@ -23,23 +42,42 @@ impl Spice {
         spice::furnsh("assets/spice/pck00011.tpc");
         spice::furnsh("assets/spice/gm_de440.tpc");
 
+        // Set the error handling to return errors, and to not print them out.
+        unsafe {
+            spice::c::erract_c(c"SET".as_ptr() as *mut _, 0, c"RETURN".as_ptr() as *mut _);
+            spice::c::errprt_c(c"SET".as_ptr() as *mut _, 0, c"NONE".as_ptr() as *mut _);
+        }
+
         Spice(Arc::new(Mutex::new(())))
     }
 
-    // TODO: Instead of this access, just set to RETURN, and do the check/reset
-    // on each call, and use a Result for the returns.
-    /*
-    pub fn erract(&self) {
-        let _lock = self.0.lock().unwrap();
-        unsafe {
-            spice::c::erract_c();
+    /// Check if the last call returned an error, if so, clear it, and return the error.  Otherwise return Ok(()).
+    ///
+    /// This assumes the lock is already held.
+    pub fn chkerr(&self) -> Result<()> {
+        let is_err = unsafe { spice::c::failed_c() };
+        if is_err != 0 {
+            let mut msg = [0u8; 26];
+            unsafe {
+                spice::c::getmsg_c(c"SHORT".as_ptr() as *mut _, 26, msg.as_mut_ptr() as *mut _);
+                spice::c::reset_c();
+            }
+            let msg = CStr::from_bytes_until_nul(&msg)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+            Err(SpiceError(msg))
+        } else {
+            Ok(())
         }
     }
-    */
 
-    pub fn str2et(&self, time: &str) -> f64 {
+    pub fn str2et(&self, time: &str) -> Result<f64> {
         let _lock = self.0.lock().unwrap();
-        spice::str2et(time)
+        let result = spice::str2et(time);
+        self.chkerr()?;
+        Ok(result)
     }
 
     #[allow(dead_code)]
@@ -50,28 +88,35 @@ impl Spice {
         ref_frame: &str,
         abcorr: &str,
         observer: &str,
-    ) -> ([f64; 6], f64) {
+    ) -> Result<([f64; 6], f64)> {
         let _lock = self.0.lock().unwrap();
-        spice::spkezr(target, et, ref_frame, abcorr, observer)
+        let result = spice::spkezr(target, et, ref_frame, abcorr, observer);
+        self.chkerr()?;
+        Ok(result)
     }
 
-    pub fn bodvrd(&self, body: &str, item: &str, maxn: usize) -> Vec<f64> {
+    pub fn bodvrd(&self, body: &str, item: &str, maxn: usize) -> Result<Vec<f64>> {
         let _lock = self.0.lock().unwrap();
-        spice::bodvrd(body, item, maxn)
+        let result = spice::bodvrd(body, item, maxn);
+        self.chkerr()?;
+        Ok(result)
     }
 
+    #[allow(dead_code)]
     pub fn bodfnd(&self, body: i32, item: &str) -> bool {
         let _lock = self.0.lock().unwrap();
         spice::bodfnd(body, item)
     }
 
     #[allow(dead_code)]
-    pub fn pxform(&self, from: &str, to: &str, et: f64) -> [[f64; 3]; 3] {
+    pub fn pxform(&self, from: &str, to: &str, et: f64) -> Result<[[f64; 3]; 3]> {
         let _lock = self.0.lock().unwrap();
-        spice::pxform(from, to, et)
+        let result = spice::pxform(from, to, et);
+        self.chkerr()?;
+        Ok(result)
     }
 
-    pub fn sxform(&self, from: &str, to: &str, et: f64) -> [[f64; 6]; 6] {
+    pub fn sxform(&self, from: &str, to: &str, et: f64) -> Result<[[f64; 6]; 6]> {
         let _lock = self.0.lock().unwrap();
         let mut result = [[0.0; 6]; 6];
         let from = CString::new(from).unwrap();
@@ -84,20 +129,22 @@ impl Spice {
                 &mut result as *mut _,
             );
         }
-        result
+        self.chkerr()?;
+        Ok(result)
     }
 
-    pub fn xf2rav(&self, xform: &[[f64; 6]; 6]) -> ([[f64; 3]; 3], [f64; 3]) {
+    pub fn xf2rav(&self, xform: &[[f64; 6]; 6]) -> Result<([[f64; 3]; 3], [f64; 3])> {
         let _lock = self.0.lock().unwrap();
         let mut rot = [[0.0; 3]; 3];
         let mut av = [0.0; 3];
         unsafe {
             spice::c::xf2rav_c(xform.as_ptr() as *mut _, rot.as_mut_ptr(), av.as_mut_ptr());
         }
-        (rot, av)
+        self.chkerr()?;
+        Ok((rot, av))
     }
 
-    pub fn gnpool(&self, name: &str, start: usize, room: usize) -> Vec<String> {
+    pub fn gnpool(&self, name: &str, start: usize, room: usize) -> Result<Vec<String>> {
         let _lock = self.0.lock().unwrap();
         let mut buf = vec![[0u8; 33]; room];
         let mut n = 0;
@@ -121,17 +168,21 @@ impl Spice {
             let str = str.to_str().unwrap().to_string();
             result.push(str);
         }
-        result
+        self.chkerr()?;
+        Ok(result)
     }
 
     #[allow(dead_code)]
-    pub fn gdpool(&self, name: &str, start: usize, room: usize) -> Vec<f64> {
+    pub fn gdpool(&self, name: &str, start: usize, room: usize) -> Result<Vec<f64>> {
         let _lock = self.0.lock().unwrap();
-        spice::gdpool(name, start, room)
+        let result = spice::gdpool(name, start, room);
+        self.chkerr()?;
+        Ok(result)
     }
 
-    pub fn bodc2n(&self, code: i32) -> (String, bool) {
+    pub fn bodc2n(&self, code: i32) -> Option<String> {
         let _lock = self.0.lock().unwrap();
-        spice::bodc2n(code)
+        let (name, found) = spice::bodc2n(code);
+        if found { Some(name) } else { None }
     }
 }
