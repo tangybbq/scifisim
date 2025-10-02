@@ -12,7 +12,7 @@ use std::io::Write;
 use bevy::{
     color::palettes::css::{GOLD, GREEN},
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
-    pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
+    light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
     prelude::*,
 };
 
@@ -77,7 +77,7 @@ fn setup(
             ..default()
         },
         TextShadow::default(),
-        TextLayout::new_with_justify(JustifyText::Left),
+        TextLayout::new_with_justify(Justify::Left),
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(5.0),
