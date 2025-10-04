@@ -5,6 +5,7 @@
 // Recommended alias.
 extern crate nalgebra as na;
 
+mod ship;
 mod solar;
 
 use std::io::Write;
@@ -13,6 +14,7 @@ use bevy::{
     color::palettes::css::{GOLD, GREEN},
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
     light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
+    pbr::wireframe::{Wireframe, WireframePlugin},
     prelude::*,
 };
 
@@ -22,20 +24,32 @@ const _G: f64 = 6.67430e-11;
 /// An approximate AU to get us going.
 const _AU: f64 = 149_597_870_700.0;
 
-fn main() {
-    solar::init_spice();
-    if true {
-        return;
+fn main() -> Result<(), anyhow::Error> {
+    let ephem = if false {
+        let ephem = solar::SolarState::from_spice()
+            .ok_or_else(|| anyhow::anyhow!("Failed to create ephemeris"))?;
+        ephem.save("solar.json")?;
+        ephem
+    } else {
+        solar::SolarState::load("solar.json")?
+    };
+    if false {
+        return Ok(());
     }
     let mut app = App::new();
+    app.insert_resource(ephem);
     app.add_plugins((DefaultPlugins, FrameTimeDiagnosticsPlugin::default()));
-    app.add_systems(Startup, setup);
-    app.add_systems(Update, text_update_system);
-    app.add_systems(Update, text_update_fps);
-    app.add_systems(Update, keyboard_input_system);
+    app.add_plugins(WireframePlugin::default());
+    app.add_plugins(solar::SolarPlugin::default());
+    app.add_plugins(ship::ShipPlugin::default());
+    // app.add_systems(Startup, setup);
+    // app.add_systems(Update, text_update_system);
+    // app.add_systems(Update, text_update_fps);
+    // app.add_systems(Update, keyboard_input_system);
 
-    setup_sim(&mut app);
+    // setup_sim(&mut app);
     app.run();
+    Ok(())
 }
 
 #[derive(Resource)]
@@ -183,6 +197,7 @@ fn setup(
     commands.spawn((
         Mesh3d(earth),
         MeshMaterial3d(grass),
+        Wireframe,
         Transform::from_xyz(0.0, -6.371e6 - 10.0, 0.0),
         BodyIndex(0),
     ));

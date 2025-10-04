@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.100"
 bevy = "0.17.1"
 nalgebra = { version = "0.34.1", features = ["serde-serialize"] }
 rust-spice = "0.7.8"
 serde = "1.0.228"
 serde_cbor = "0.11.2"
+serde_json = { version = "1.0.145", features = ["float_roundtrip"] }
 
 [profile.dev]
 opt-level = 1

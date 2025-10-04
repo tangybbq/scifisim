@@ -6,23 +6,66 @@
 // for spice to actually be useful, we'll need to use our own lock, and just
 // make sure we only use the API while holding the lock.
 
-use bevy::ecs::component::Component;
+use std::path::Path;
+
+use bevy::prelude::*;
 use na::Matrix3x1;
 use nalgebra::{Matrix3, Vector3};
 use serde::{Deserialize, Serialize};
 
 mod spice;
 
-#[derive(Component, Debug, Serialize, Deserialize)]
-pub struct Body {
-    pub id: i32,
-    pub name: String,
+/// A marker for the Earth.
+#[derive(Component)]
+pub struct EarthMarker;
+
+/// Indicates the id of an item that came (directly or indirectly) from SPICE.
+#[derive(Clone, Component, Debug, Serialize, Deserialize)]
+pub struct SpiceId(i32);
+
+/// An object that has sufficient mass to be considered a body for orbital
+/// mechanics.  Units are in km^3/s^2.
+#[derive(Clone, Component, Debug, Serialize, Deserialize)]
+pub struct MassiveBody {
     pub gm: f64, // Gravitational constant * mass, km^3/s^2
+}
+
+/// A celestial object that has a position and velocity in space.  Units are in
+/// km and km/s, with an origin at the solar system barycenter.
+#[derive(Clone, Component, Debug, Serialize, Deserialize)]
+pub struct OrbitalBody {
     pub pos: Vector3<f64>,
     pub vel: Vector3<f64>,
+}
+
+/// An object that has a meaningful notion of a radius.  Units are in km, and
+/// are along the x, y, and z axes.
+#[derive(Clone, Component, Debug, Serialize, Deserialize)]
+pub struct SizedBody {
     pub radii: Vector3<f64>,
+}
+
+/// For bodies that rotate, the direction of the north pole, and the angular
+/// velocity in radians per second.  The angle at the current time is 'rot',
+/// which should be kept between 0 and 2*PI.
+#[derive(Clone, Component, Debug, Serialize, Deserialize)]
+pub struct RotationalBody {
     pub north: Matrix3x1<f64>,
     pub omega: f64,
+    pub rot: f64,
+}
+
+/// All of the above are captured by "Body" which is primarily used to serialize
+/// data in and out to avoid needing the entire set of SPICE kernels for normal
+/// gameplay.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Body {
+    pub id: SpiceId,
+    pub name: Name,
+    pub massive: MassiveBody,
+    pub orbital: OrbitalBody,
+    pub size: SizedBody,
+    pub rotational: RotationalBody,
 }
 
 impl Body {
@@ -61,53 +104,147 @@ impl Body {
         let vel = Vector3::new(state[3], state[4], state[5]);
 
         Some(Self {
-            id,
-            name,
-            gm: gm[0],
-            radii,
-            pos,
-            vel,
-            north,
-            omega,
+            id: SpiceId(id),
+            orbital: OrbitalBody { pos, vel },
+            size: SizedBody { radii },
+            rotational: RotationalBody {
+                north,
+                omega,
+                rot: 0.0,
+            },
+            massive: MassiveBody { gm: gm[0] },
+            name: Name::new(name),
         })
     }
 }
 
-pub fn init_spice() {
-    let sl = spice::get_instance();
-    // TODO: Better start date.
-    let et = sl.str2et("2024-01-01T00:00:00").unwrap();
-    let mut bodies = Vec::new();
-    let mut start = 0;
-    loop {
-        let limit = 500;
-        let names = sl.gnpool("BODY*_GM", start, limit).unwrap();
-        println!("Names: count: {}", names.len());
-        for name in &names {
-            let code = name[4..name.len() - 3].parse::<i32>().unwrap();
+#[derive(Component, Resource, Debug, Serialize, Deserialize)]
+pub struct SolarState {
+    /// The time represented by this snapshot, in seconds past J2000.
+    pub et: f64,
+    /// The time, as a string, to make this more readable.
+    pub time: String,
+    /// The bodies in the solar system.
+    pub bodies: Vec<Body>,
+}
 
-            if let Some(body) = Body::new_from(code, et) {
-                if body.gm > 1.0 && !body.name.ends_with(" BARYCENTER") {
-                    bodies.push(body);
+impl SolarState {
+    pub fn from_spice() -> Option<Self> {
+        let sl = spice::get_instance();
+        // TODO: Better start date.
+        let time = "2024-01-01T00:00:00";
+        let et = sl.str2et(time).ok()?;
+        let mut bodies = Vec::new();
+        let mut start = 0;
+        loop {
+            let limit = 500;
+            let names = sl.gnpool("BODY*_GM", start, limit).ok()?;
+            println!("Names: count: {}", names.len());
+            for name in &names {
+                let code = name[4..name.len() - 3].parse::<i32>().ok()?;
+
+                if let Some(body) = Body::new_from(code, et) {
+                    if body.massive.gm > 1.0 && !body.name.ends_with(" BARYCENTER") {
+                        bodies.push(body);
+                    }
+                    continue;
                 }
+            }
+            if names.len() < limit {
+                break;
+            }
+
+            start += names.len();
+        }
+        bodies.sort_by(|a, b| b.massive.gm.partial_cmp(&a.massive.gm).unwrap());
+        Some(Self {
+            et,
+            time: time.to_string(),
+            bodies,
+        })
+    }
+
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> std::io::Result<()> {
+        let file = std::fs::File::create(path)?;
+        serde_json::to_writer_pretty(file, self).map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Serialization error: {}", e),
+            )
+        })
+    }
+
+    pub(crate) fn load(arg: &str) -> std::io::Result<Self> {
+        let file = std::fs::File::open(arg)?;
+        let state = serde_json::from_reader(file).map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Deserialization error: {}", e),
+            )
+        })?;
+        Ok(state)
+    }
+}
+
+#[derive(Default)]
+pub struct SolarPlugin;
+
+impl Plugin for SolarPlugin {
+    fn build(&self, app: &mut bevy::prelude::App) {
+        app.add_systems(Startup, setup_solar);
+        app.add_systems(FixedUpdate, physics_step);
+    }
+}
+
+pub fn setup_solar(ephem: Res<SolarState>, mut commands: bevy::prelude::Commands) {
+    for body in &ephem.bodies {
+        let e = commands
+            .spawn((
+                body.id.clone(),
+                body.massive.clone(),
+                body.orbital.clone(),
+                body.size.clone(),
+                body.rotational.clone(),
+                body.name.clone(),
+            ))
+            .id();
+
+        if body.name.as_str() == "EARTH" {
+            commands.entity(e).insert(EarthMarker);
+        }
+    }
+}
+
+/// The big physics update.
+fn physics_step(
+    mut bodies: Query<(Entity, Option<&MassiveBody>, &mut OrbitalBody)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs_f64();
+
+    let mut updates = Vec::new();
+    for (e1, _, ob1) in bodies.iter() {
+        let mut total_acceleration = na::Vector3::zeros();
+        for (e2, mb2, ob2) in bodies.iter() {
+            if e1 == e2 {
                 continue;
             }
-        }
-        if names.len() < limit {
-            break;
-        }
 
-        start += names.len();
+            if let Some(mb2) = mb2 {
+                let rel_pos = ob2.pos - ob1.pos;
+                let distance = rel_pos.norm();
+                // TODO: Impact check.
+                let acceleration = rel_pos * mb2.gm / (distance * distance * distance);
+                total_acceleration += acceleration;
+            }
+        }
+        updates.push(total_acceleration);
     }
 
-    bodies.sort_by(|a, b| b.gm.partial_cmp(&a.gm).unwrap());
-    for body in &bodies {
-        println!("{:20} {:8}", body.name, body.id);
-        println!("   gm: {}: radii: {:?}", body.gm, body.radii);
-        println!("   omega: {} {:?}", body.omega, body.north);
-        println!("   pos: {:?} km", body.pos);
-        println!("   vel: {:?} km/s", body.vel);
+    // Now, go through again, iteratively, and apply all of the updates.
+    for ((_, _, mut ob), update) in bodies.iter_mut().zip(updates.iter()) {
+        ob.vel += *update * dt;
+        let delta = ob.vel * dt;
+        ob.pos += delta;
     }
-
-    println!("Interesting: {}", bodies.len());
 }
