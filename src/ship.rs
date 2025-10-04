@@ -3,7 +3,7 @@
 //! Most of the information behind the physics of the ship is in `solar.rs`,
 //! including orbital movements. This module manages ship-specific aspects.
 
-use bevy::prelude::{self, *};
+use bevy::prelude::*;
 use na::{Unit, Vector3};
 use serde::{Deserialize, Serialize};
 

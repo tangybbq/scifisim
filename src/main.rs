@@ -8,21 +8,7 @@ extern crate nalgebra as na;
 mod ship;
 mod solar;
 
-use std::io::Write;
-
-use bevy::{
-    color::palettes::css::{GOLD, GREEN},
-    diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
-    light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
-    pbr::wireframe::{Wireframe, WireframePlugin},
-    prelude::*,
-};
-
-/// The gravitational constant.
-const _G: f64 = 6.67430e-11;
-
-/// An approximate AU to get us going.
-const _AU: f64 = 149_597_870_700.0;
+use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, pbr::wireframe::WireframePlugin, prelude::*};
 
 fn main() -> Result<(), anyhow::Error> {
     let ephem = if false {
@@ -52,8 +38,8 @@ fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[derive(Resource)]
-struct Paused(bool);
+// #[derive(Resource)]
+// struct Paused(bool);
 
 // Marker struct to identify the main camera.
 #[derive(Component)]
@@ -64,16 +50,17 @@ struct MainCamera;
 struct StateText;
 
 // Marker for bodies, gives index into `body` in the sim.
-#[derive(Component)]
-struct BodyIndex(usize);
+// #[derive(Component)]
+// struct BodyIndex(usize);
 
 // Marker for crafts, gives index into `craft` in the sim.
-#[derive(Component)]
-struct CraftIndex(usize);
+// #[derive(Component)]
+// struct CraftIndex(usize);
 
 #[derive(Component)]
 struct FpsText;
 
+/*
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -238,7 +225,9 @@ fn keyboard_input_system(
         }
     }
 }
+*/
 
+/*
 fn text_update_system(
     time: Res<Time<Virtual>>,
     mut sim: ResMut<Simulation>,
@@ -351,7 +340,9 @@ fn text_update_system(
         // );
     }
 }
+*/
 
+/*
 /// Convert a sim vector to a Bevy vector.
 fn sim_to_bevy(v: &na::Vector3<f64>) -> Vec3 {
     Vec3::new(v.x as f32, v.z as f32, -v.y as f32)
@@ -631,3 +622,4 @@ impl Thrust {
         self.direction.normalize() * (self.magnitude)
     }
 }
+*/
