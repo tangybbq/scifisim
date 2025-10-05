@@ -146,6 +146,32 @@ fn setup_ui(
         Name::new("Ball"),
     ));
 
+    let vignetter_image = asset_server.load("tex/vignette_512.png");
+    commands
+        .spawn(Node {
+            left: px(0.0),
+            top: px(0.0),
+            width: percent(100.0),  // Twice the radius.
+            height: percent(100.0), // Twice the radius.
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            // position_type: PositionType::Absolute,
+            // left: percent(50.0) - px(100.0),
+            // top: percent(50.0) - px(100.0),
+            ..Default::default()
+        })
+        .with_child((
+            Node {
+                width: px(200.0),  // Twice the radius.
+                height: px(200.0), // Twice the radius.
+                ..Default::default()
+            },
+            ImageNode {
+                image: vignetter_image,
+                ..Default::default()
+            },
+        ));,
+
     // commands.spawn((
     //     DirectionalLight {
     //         shadows_enabled: true,
