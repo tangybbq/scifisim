@@ -7,6 +7,7 @@ extern crate nalgebra as na;
 
 mod ship;
 mod solar;
+mod ui;
 
 use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, pbr::wireframe::WireframePlugin, prelude::*};
 
@@ -28,6 +29,7 @@ fn main() -> Result<(), anyhow::Error> {
     app.add_plugins(WireframePlugin::default());
     app.add_plugins(solar::SolarPlugin::default());
     app.add_plugins(ship::ShipPlugin::default());
+    app.add_plugins(ui::UIPlugin::default());
     // app.add_systems(Startup, setup);
     // app.add_systems(Update, text_update_system);
     // app.add_systems(Update, text_update_fps);
