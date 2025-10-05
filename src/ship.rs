@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use na::{Unit, Vector3};
 use serde::{Deserialize, Serialize};
 
-use crate::solar::{EarthMarker, MassiveBody, OrbitalBody, setup_solar};
+use crate::solar::{AttitudeState, EarthMarker, MassiveBody, OrbitalBody, setup_solar};
 
 #[derive(Component)]
 pub struct PlayerShip;
@@ -103,6 +103,10 @@ fn setup_ship(
         OrbitalBody {
             pos: r_world,
             vel: v_world,
+        },
+        AttitudeState {
+            q_bw: na::UnitQuaternion::identity(),
+            omega_b: Vector3::new(1.0, 2.0, 3.0).normalize() * 0.5,
         },
         PlayerShip,
     ));

@@ -45,14 +45,12 @@ pub struct SizedBody {
     pub radii: Vector3<f64>,
 }
 
-/// For bodies that rotate, the direction of the north pole, and the angular
-/// velocity in radians per second.  The angle at the current time is 'rot',
-/// which should be kept between 0 and 2*PI.
+/// The AttitudeState represents the current orientation, and angular velocity of the body.
+/// The orientation is a convertion between body to world, and the omega is the angular velocity relative to the body frame.
 #[derive(Clone, Component, Debug, Serialize, Deserialize)]
-pub struct RotationalBody {
-    pub north: Matrix3x1<f64>,
-    pub omega: f64,
-    pub rot: f64,
+pub struct AttitudeState {
+    pub q_bw: na::UnitQuaternion<f64>,
+    pub omega_b: Matrix3x1<f64>,
 }
 
 /// All of the above are captured by "Body" which is primarily used to serialize
@@ -65,7 +63,7 @@ pub struct Body {
     pub massive: MassiveBody,
     pub orbital: OrbitalBody,
     pub size: SizedBody,
-    pub rotational: RotationalBody,
+    pub attitude: AttitudeState,
 }
 
 impl Body {
@@ -94,9 +92,13 @@ impl Body {
             rot[1][0], rot[1][1], rot[1][2], // Row 1
             rot[2][0], rot[2][1], rot[2][2], // Row 2
         ]);
-        let north = rot * Vector3::new(0.0, 0.0, 1.0);
+
         let av = Vector3::new(av[0], av[1], av[2]);
-        let omega = av.norm();
+        let r_bw = na::Rotation3::from_matrix(&rot);
+        let q_bw = na::UnitQuaternion::from_rotation_matrix(&r_bw);
+
+        // Invert the angular velocity as spice is returning a frame rotation, not the earth's rotation.
+        let omega_b = -av;
 
         let (state, _) = sl.spkezr(&name, et, "ECLIPJ2000", "NONE", "SSB").ok()?;
 
@@ -107,11 +109,7 @@ impl Body {
             id: SpiceId(id),
             orbital: OrbitalBody { pos, vel },
             size: SizedBody { radii },
-            rotational: RotationalBody {
-                north,
-                omega,
-                rot: 0.0,
-            },
+            attitude: AttitudeState { q_bw, omega_b },
             massive: MassiveBody { gm: gm[0] },
             name: Name::new(name),
         })
@@ -192,7 +190,7 @@ pub struct SolarPlugin;
 impl Plugin for SolarPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_systems(Startup, setup_solar);
-        app.add_systems(FixedUpdate, physics_step);
+        app.add_systems(FixedUpdate, (physics_step, rotation_step));
     }
 }
 
@@ -204,7 +202,7 @@ pub fn setup_solar(ephem: Res<SolarState>, mut commands: bevy::prelude::Commands
                 body.massive.clone(),
                 body.orbital.clone(),
                 body.size.clone(),
-                body.rotational.clone(),
+                body.attitude.clone(),
                 body.name.clone(),
             ))
             .id();
@@ -246,5 +244,20 @@ fn physics_step(
         ob.vel += *update * dt;
         let delta = ob.vel * dt;
         ob.pos += delta;
+    }
+}
+
+fn rotation_step(mut bodies: Query<&mut AttitudeState>, time: Res<Time>) {
+    let dt = time.delta_secs_f64();
+
+    for mut attitude in bodies.iter_mut() {
+        // Update the attitude state based on the current angular velocity.
+        let angle = attitude.omega_b.norm() * dt;
+        if angle > 1.0e-12 {
+            let axis = na::Unit::new_normalize(attitude.omega_b);
+            let delta_q = na::UnitQuaternion::from_axis_angle(&axis, angle);
+            attitude.q_bw = delta_q * attitude.q_bw;
+            attitude.q_bw.renormalize();
+        }
     }
 }

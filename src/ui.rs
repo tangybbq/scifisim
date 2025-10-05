@@ -8,7 +8,7 @@ use std::io::Write;
 
 // use bevy::pbr::wireframe::Wireframe;
 
-use crate::solar::{OrbitalBody, SizedBody};
+use crate::solar::{AttitudeState, OrbitalBody, SizedBody};
 
 pub const UI_LAYER: RenderLayers = RenderLayers::layer(8);
 pub const BALL_LAYER: RenderLayers = RenderLayers::layer(7);
@@ -108,7 +108,6 @@ fn setup_ui(
         Name::new("Ball Camera"),
         Transform::from_xyz(0.0, 0.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         Projection::Orthographic(OrthographicProjection::default_3d()),
-        BallMarker,
     ));
 
     // Throw in a sphere to see if I can render it.
@@ -119,7 +118,7 @@ fn setup_ui(
     .mesh()
     .uv(24, 24);
 
-    let ball_tex = asset_server.load("tex/ball.png");
+    let ball_tex = asset_server.load("tex/navball_surface_2048x1024.png");
 
     let ball_material = materials.add(StandardMaterial {
         // base_color: GREEN.into(),
@@ -127,6 +126,7 @@ fn setup_ui(
         base_color_texture: Some(ball_tex),
         perceptual_roughness: 0.5,
         unlit: true,
+        cull_mode: None,
         ..default()
     });
 
@@ -142,6 +142,7 @@ fn setup_ui(
             0.0,
         )),
         // Wireframe,
+        BallMarker,
         Name::new("Ball"),
     ));
 
@@ -166,13 +167,13 @@ fn setup_ui(
 fn update_ui(
     mut text: Query<&mut Text, With<InfoText>>,
     time: Res<Time<Virtual>>,
-    ship: Query<&OrbitalBody, With<crate::ship::PlayerShip>>,
-    earth: Query<(&OrbitalBody, &SizedBody), With<crate::solar::EarthMarker>>,
+    ship: Query<(&OrbitalBody, &AttitudeState), With<crate::ship::PlayerShip>>,
+    earth: Query<(&OrbitalBody, &SizedBody, &AttitudeState), With<crate::solar::EarthMarker>>,
     mut ball: Query<&mut Transform, With<BallMarker>>,
 ) {
     let seconds = time.elapsed_secs_f64();
-    let ship = ship.single().unwrap();
-    let (earth, earth_size) = earth.single().unwrap();
+    let (ship, ship_attitude) = ship.single().unwrap();
+    let (earth, earth_size, earth_attitude) = earth.single().unwrap();
     let mut ball = ball.single_mut().unwrap();
 
     if let Ok(mut text) = text.single_mut() {
@@ -195,11 +196,20 @@ fn update_ui(
 
         **text = String::from_utf8(message).unwrap();
 
+        let q_ball = ship_attitude.q_bw.conjugate() * earth_attitude.q_bw;
         // Point the ball to the same as the ship.
-        ball.rotation = Quat::from_rotation_arc(Vec3::Y, sim_to_bevy(&up));
+        // println!("q_ball: {}", sim_quat_to_bevy(&q_ball));
+        ball.rotation = sim_quat_to_bevy(&q_ball);
     }
 }
 
-fn sim_to_bevy(v: &na::Vector3<f64>) -> Vec3 {
-    Vec3::new(v.x as f32, v.z as f32, -v.y as f32)
+// fn sim_to_bevy(v: &na::Vector3<f64>) -> Vec3 {
+//     Vec3::new(v.x as f32, v.z as f32, -v.y as f32)
+// }
+
+fn sim_quat_to_bevy(q: &na::UnitQuaternion<f64>) -> Quat {
+    let r =
+        na::UnitQuaternion::from_axis_angle(&na::Vector3::x_axis(), -std::f64::consts::FRAC_PI_2);
+    let q = r * q * r.conjugate();
+    Quat::from_array([q.i as f32, q.j as f32, q.k as f32, q.w as f32])
 }
