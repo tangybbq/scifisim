@@ -9,7 +9,6 @@
 use std::path::Path;
 
 use bevy::prelude::*;
-use na::Matrix3x1;
 use nalgebra::{Matrix3, Vector3};
 use serde::{Deserialize, Serialize};
 
@@ -50,7 +49,15 @@ pub struct SizedBody {
 #[derive(Clone, Component, Debug, Serialize, Deserialize)]
 pub struct AttitudeState {
     pub q_bw: na::UnitQuaternion<f64>,
-    pub omega_b: Matrix3x1<f64>,
+    pub omega_b: Vector3<f64>,
+}
+
+/// The attitude can also be under acceleration (such as by an RCS system). This
+/// is represented here as an angular acceleration in the body frame (with Z
+/// being the axis along which the main engine fires).
+#[derive(Clone, Component, Debug, Serialize, Deserialize)]
+pub struct AttitudeControl {
+    pub alpha_b: Vector3<f64>,
 }
 
 /// All of the above are captured by "Body" which is primarily used to serialize
@@ -190,7 +197,14 @@ pub struct SolarPlugin;
 impl Plugin for SolarPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_systems(Startup, setup_solar);
-        app.add_systems(FixedUpdate, (physics_step, rotation_step));
+        app.add_systems(
+            FixedUpdate,
+            (
+                physics_step,
+                rot_accel_step.before(rotation_step),
+                rotation_step,
+            ),
+        );
     }
 }
 
@@ -244,6 +258,16 @@ fn physics_step(
         ob.vel += *update * dt;
         let delta = ob.vel * dt;
         ob.pos += delta;
+    }
+}
+
+/// Update the rotation based on the rotation vector.
+fn rot_accel_step(mut bodies: Query<(&mut AttitudeState, &AttitudeControl)>, time: Res<Time>) {
+    let dt = time.delta_secs_f64();
+
+    for (mut attitude, control) in bodies.iter_mut() {
+        // Update the angular velocity based on the current angular acceleration.
+        attitude.omega_b += control.alpha_b * dt;
     }
 }
 
