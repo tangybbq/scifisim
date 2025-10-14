@@ -4,8 +4,10 @@
 		{
 			"label": "cargo run",
 			"type": "shell",
-			"command": "cargo",
-			"args": ["run"],
+			"command": "./script/run.sh",
+			"args": [
+				"${relativeFile}"
+			],
 			"group": {
 				"kind": "build",
 				"isDefault": true
