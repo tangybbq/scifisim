@@ -1,4 +1,14 @@
 //! Demonstration of the intermediate axis theorem.
+//!
+//! The intermediate axis theorem (or tennis-racket theorem) states that
+//! rotation about the axis of an object that is the intermediate (meaning one
+//! of the other axes is larger and the other smaller) results in an object that
+//! has unexpected flips in its orientation.
+//!
+//! This demo shows a pair of cylinders setup to be similar to the handle in
+//! this video: https://www.youtube.com/watch?v=1x5UiwEEvpQ that clearly
+//! demonstrates the flipping effect. If the rotation physics are implemented
+//! correctly, this demo should show a similar flipping effect.
 
 extern crate nalgebra as na;
 
