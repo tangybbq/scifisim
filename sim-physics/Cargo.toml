@@ -1,0 +1,8 @@
+[package]
+name = "sim-physics"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nalgebra = "0.34.1"
+bevy = "0.17.1"
