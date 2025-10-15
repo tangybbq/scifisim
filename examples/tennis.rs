@@ -118,8 +118,8 @@ fn update_rotational_physics(mut query: Query<&mut AttitudeState>, time: Res<Tim
 pub struct AttitudeState {
     /// Orientation: body -> world
     pub q_bw: na::UnitQuaternion<f64>,
-    /// Angular momentum (world frame), half stepped for leapfrog
-    pub lw_half: na::Vector3<f64>,
+    /// Angular momentum in BODY frame, half stepped for leapfrog
+    pub lb_half: na::Vector3<f64>,
     /// Principal inertia in body frame.
     pub i_body: na::Vector3<f64>,
 }
@@ -130,75 +130,50 @@ impl AttitudeState {
         lw: na::Vector3<f64>,
         i_body: na::Vector3<f64>,
     ) -> Self {
+        // Convert initial world-frame L to body frame
+        let lb_half = q_bw.inverse() * lw;
         Self {
             q_bw,
-            lw_half: lw,
+            lb_half,
             i_body,
         }
     }
 
-    // Leapfrog step of size dt with torque in world frame.
     pub fn step(&mut self, torque_w_now: na::Vector3<f64>, dt: f64) {
-        // --- KICK (half step): Update momentum from t-dt/2 to t ---
-        let torque_b_now = self.q_bw.inverse() * torque_w_now;
-
-        // Get L_b at half-step
-        let lb_half = self.q_bw.inverse() * self.lw_half;
-
-        // Compute omega at half-step
-        let inv_i = na::Vector3::new(
-            1.0 / self.i_body.x,
-            1.0 / self.i_body.y,
-            1.0 / self.i_body.z,
-        );
+        // Compute omega at half-step (L is already in body frame)
         let omega_b_half = na::Vector3::new(
-            inv_i.x * lb_half.x,
-            inv_i.y * lb_half.y,
-            inv_i.z * lb_half.z,
+            self.lb_half.x / self.i_body.x,
+            self.lb_half.y / self.i_body.y,
+            self.lb_half.z / self.i_body.z,
         );
 
-        // Euler equation: dL/dt = L × ω + τ
-        let dl_dt_b = lb_half.cross(&omega_b_half) + torque_b_now;
+        // --- DRIFT: Update orientation ---
+        let dq = exp_quat(&(dt * omega_b_half));
+        self.q_bw = self.q_bw * dq; // Ensure unit quaternion
 
-        // Half-kick: advance L by dt/2
-        let lb_full = lb_half + dl_dt_b * (dt * 0.5);
+        // --- KICK: Update momentum in body frame ---
+        let torque_b = self.q_bw.inverse() * torque_w_now;
+        let dl_dt_b = self.lb_half.cross(&omega_b_half) + torque_b;
+        self.lb_half += dl_dt_b * dt;
+    }
 
-        // --- DRIFT: Update orientation from t to t+dt using L at full step ---
-        let omega_b_full = na::Vector3::new(
-            inv_i.x * lb_full.x,
-            inv_i.y * lb_full.y,
-            inv_i.z * lb_full.z,
-        );
-
-        let dq = exp_quat(&(dt * omega_b_full));
-        self.q_bw = self.q_bw * dq;
-
-        // --- KICK (half step): Update momentum from t to t+dt/2 ---
-        let torque_b_new = self.q_bw.inverse() * torque_w_now;
-
-        // Recompute derivative at new orientation
-        let dl_dt_b_new = lb_full.cross(&omega_b_full) + torque_b_new;
-
-        // Half-kick: advance L by another dt/2
-        let lb_next_half = lb_full + dl_dt_b_new * (dt * 0.5);
-
-        // Store back in world frame
-        self.lw_half = self.q_bw * lb_next_half;
+    /// Get angular momentum in world frame
+    pub fn angular_momentum_world(&self) -> na::Vector3<f64> {
+        self.q_bw * self.lb_half
     }
 }
 
-/// Exponential map for a pure-vector quaternuion input v (axis*angle).
-/// Returns a unit quaternion representing rotation by |v| radians around axis v/|v|.
+/// Exponential map: converts axis-angle vector to unit quaternion.
+///
+/// Given a 3D vector v = θ * n (where n is unit axis, θ is rotation angle),
+/// returns the unit quaternion q representing rotation by θ radians around n.
 fn exp_quat(v: &na::Vector3<f64>) -> na::UnitQuaternion<f64> {
     let theta = v.norm();
     if theta < 1e-10 {
-        let q = na::Quaternion::from_parts(1.0, 0.5 * v);
-        na::UnitQuaternion::from_quaternion(q)
+        // No significant rotation
+        na::UnitQuaternion::identity()
     } else {
-        let half = 0.5 * theta;
-        let s = half.sin() / theta;
-        let q = na::Quaternion::from_parts(half.cos(), s * v);
-        na::UnitQuaternion::from_quaternion(q)
+        na::UnitQuaternion::from_axis_angle(&na::Unit::new_normalize(*v), theta)
     }
 }
 
