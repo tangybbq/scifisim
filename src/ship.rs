@@ -3,12 +3,13 @@
 //! Most of the information behind the physics of the ship is in `solar.rs`,
 //! including orbital movements. This module manages ship-specific aspects.
 
-use bevy::prelude::*;
+use bevy::{asset, prelude::*};
 use na::{Unit, Vector3};
 use serde::{Deserialize, Serialize};
 
-use crate::solar::{
-    AttitudeControl, AttitudeState, EarthMarker, MassiveBody, OrbitalBody, setup_solar,
+use crate::{
+    solar::{AttitudeControl, AttitudeState, EarthMarker, MassiveBody, OrbitalBody, setup_solar},
+    ui::sim_quat_to_bevy,
 };
 
 #[derive(Component)]
@@ -67,6 +68,7 @@ impl Plugin for ShipPlugin {
         app.insert_resource(ShipOrbit::new_leo());
         app.add_systems(Startup, setup_ship.after(setup_solar));
         app.add_systems(Update, rcs_keys_to_alpha);
+        app.add_systems(Update, update_ship);
     }
 }
 
@@ -74,6 +76,7 @@ fn setup_ship(
     orbit: Res<ShipOrbit>,
     earth: Query<(&MassiveBody, &OrbitalBody), With<EarthMarker>>,
     mut commands: Commands,
+    asset_server: Res<asset::AssetServer>,
 ) {
     // Ensure that the periapsis direction is perpendicular to the plane normal.
     assert!(
@@ -103,6 +106,8 @@ fn setup_ship(
     // Spawn the ship.
     commands.spawn((
         Name::new("PlayerShip"),
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/output.gltf"))),
+        Transform::default(),
         OrbitalBody {
             pos: r_world,
             vel: v_world,
@@ -134,6 +139,13 @@ fn setup_ship(
     );
     println!("  omega_b: {}", Vector3::<f64>::zeros());
     */
+}
+
+// Update the ship's transform. We are built around 0,0,0 in bevy space as the center of the ship, so this is just bringing over the orientation.
+fn update_ship(mut query: Query<(&mut Transform, &AttitudeState), With<PlayerShip>>) {
+    for (mut transform, state) in query.iter_mut() {
+        transform.rotation = sim_quat_to_bevy(&state.q_bw);
+    }
 }
 
 const ACCEL_X: f64 = 0.25;

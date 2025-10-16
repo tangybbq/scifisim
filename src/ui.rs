@@ -4,8 +4,11 @@
 //! its own 2d camera to overlay this information on any other camera.
 
 use bevy::{
-    camera::visibility::RenderLayers, color::palettes::css::GOLD, pbr::wireframe::WireframeConfig,
-    prelude::*, scene::SceneInstanceReady,
+    camera::{Viewport, visibility::RenderLayers},
+    color::palettes::css::GOLD,
+    pbr::wireframe::WireframeConfig,
+    prelude::*,
+    scene::SceneInstanceReady,
 };
 use std::io::Write;
 
@@ -33,6 +36,9 @@ pub struct BallMarker;
 
 #[derive(Component)]
 pub struct MarkerMarker;
+
+#[derive(Component)]
+pub struct MainCameraMarker;
 
 impl Plugin for UIPlugin {
     fn build(&self, app: &mut App) {
@@ -111,6 +117,12 @@ fn setup_ui(
         Camera3d::default(),
         Camera {
             order: 7,
+            clear_color: ClearColorConfig::None,
+            viewport: Some(Viewport {
+                physical_position: UVec2::new(10, 10),
+                physical_size: UVec2::new(200, 200),
+                ..default()
+            }),
             ..default()
         },
         BALL_LAYER,
@@ -248,6 +260,35 @@ fn setup_ui(
         brightness: 300.0,
         ..default()
     });
+
+    // The main 3d scene.
+    commands.spawn((
+        Camera3d::default(),
+        Camera {
+            order: 0,
+            ..default()
+        },
+        Name::new("Main 3D Camera"),
+        Transform::from_xyz(0.0, -2.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Projection::Perspective(PerspectiveProjection {
+            fov: std::f32::consts::FRAC_PI_3,
+            near: 1.0,
+            far: 1_000_000.0,
+            ..default()
+        }),
+        MainCameraMarker,
+    ));
+
+    // And some light for the ship
+    commands.spawn((
+        DirectionalLight {
+            shadows_enabled: true,
+            illuminance: 10_000.0,
+            ..default()
+        },
+        Transform::default().looking_to(Vec3::new(0.0, 2.0, 10.5).normalize(), Vec3::Z),
+        Name::new("Main Light"),
+    ));
 }
 
 /// Put scenes from the UI into our layer.
@@ -288,7 +329,7 @@ fn update_ui(
 ) {
     let seconds = time.elapsed_secs_f64();
     let (ship, ship_attitude) = ship.single().unwrap();
-    let (earth, earth_size, earth_attitude) = earth.single().unwrap();
+    let (earth, earth_size, _earth_attitude) = earth.single().unwrap();
     let mut ball = ball.single_mut().unwrap();
     let mut marker = marker.single_mut().unwrap();
 
@@ -378,7 +419,7 @@ fn sim_to_bevy(v: &na::Vector3<f64>) -> Vec3 {
     Vec3::new(v.x as f32, v.z as f32, -v.y as f32)
 }
 
-fn sim_quat_to_bevy(q: &na::UnitQuaternion<f64>) -> Quat {
+pub fn sim_quat_to_bevy(q: &na::UnitQuaternion<f64>) -> Quat {
     let r =
         na::UnitQuaternion::from_axis_angle(&na::Vector3::x_axis(), -std::f64::consts::FRAC_PI_2);
     let q = r.conjugate() * q * r;
