@@ -22,7 +22,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         // Bump up the Fixed Update interval so that we can spin this faster to better observe the effect.
-        .insert_resource(Time::<Fixed>::from_hz(500.0))
+        // .insert_resource(Time::<Fixed>::from_hz(500.0))
         .add_systems(Startup, setup)
         .add_systems(Update, update_bevy_rot)
         .add_systems(FixedUpdate, update_rotational_physics)
