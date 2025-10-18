@@ -37,10 +37,11 @@ fn setup(
     commands
         .spawn((
             Transform::default(),
-            AttitudeState::new(
+            AttitudeState::new_with_omega_b(
                 na::UnitQuaternion::identity(),
-                na::Vector3::new(3000.0, 0.0, 3.0),
+                na::Vector3::new(3000.0 / 373.0, 0.0, 3.0 / 78.0),
                 na::Vector3::new(373.0, 415.0, 78.0),
+                na::Vector3::zeros(),
             ),
         ))
         .with_child((
@@ -121,7 +122,7 @@ fn update_rotational_physics(mut query: Query<&mut AttitudeState>, time: Res<Tim
     for mut attitude in query.iter_mut() {
         // No torque for now.
         let torque_w_now = na::Vector3::zeros();
-        attitude.step(torque_w_now, dt);
+        attitude.step_rot_fixed_tau_b(dt, torque_w_now);
     }
 }
 
