@@ -14,6 +14,7 @@ extern crate nalgebra as na;
 
 use bevy::{
     color::palettes::css::{GREEN, RED, YELLOW},
+    post_process::motion_blur::MotionBlur,
     prelude::*,
 };
 use sim_physics::AttitudeState;
@@ -102,6 +103,10 @@ fn setup(
 
     commands.spawn((
         Camera3d { ..default() },
+        MotionBlur {
+            shutter_angle: 1.0,
+            samples: 8,
+        },
         Transform::from_xyz(-1.5, 2.5, 4.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }
